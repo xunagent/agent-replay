@@ -458,18 +458,22 @@ function getSpeed() { return parseFloat(speed.value); }
 function delay(ms) { return new Promise(r => setTimeout(r, ms / getSpeed())); }
 
 function clearLoopHighlight() {
-  ['think','act','obs','decide','done'].forEach(s => {
-    $(`box-${s}`).classList.remove('active');
+  ['think','act','obs','decide'].forEach(s => {
+    const el = $(`box-${s}`);
+    if (el) el.classList.remove('active');
   });
   ['arrow-1','arrow-2','arrow-3'].forEach(a => {
-    $(a).classList.remove('active');
+    const el = $(a);
+    if (el) el.classList.remove('active');
   });
   loopBack.classList.remove('show');
 }
 
 function highlightStage(stage) {
   clearLoopHighlight();
-  $(`box-${stage}`).classList.add('active');
+  // 'done' / 'user' don't have corresponding loop boxes — handle gracefully
+  const el = $(`box-${stage}`);
+  if (el) el.classList.add('active');
   // light up arrows leading TO this box
   const arrowMap = { act: 'arrow-1', obs: 'arrow-2', decide: 'arrow-3' };
   if (arrowMap[stage]) $(arrowMap[stage]).classList.add('active');
