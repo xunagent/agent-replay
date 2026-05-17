@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 循环可视化 · 看懂 ReAct</title>
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --primary: #3b82f6;
+    --primary-dark: #2563eb;
+    --think: #f59e0b;
+    --act: #10b981;
+    --obs: #8b5cf6;
+    --decide: #ec4899;
+    --done: #059669;
+    --code-bg: #f3f4f6;
+    --shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 20px 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 920px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 28px 28px 24px;
+    border-radius: 16px;
+    margin-bottom: 18px;
+    box-shadow: var(--shadow);
+  }
+  .header h1 { font-size: 24px; font-weight: 600; margin-bottom: 6px; }
+  .header p { opacity: 0.92; font-size: 14px; }
+  .header .nav { margin-top: 12px; font-size: 12px; }
+  .header .nav a { color: #fff; opacity: 0.85; text-decoration: underline; }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    padding: 14px 16px;
+    background: var(--card);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+  .controls select {
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    background: white;
+    cursor: pointer;
+    flex: 1;
+    min-width: 180px;
+  }
+  .btn {
+    padding: 7px 14px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    background: var(--primary);
+    color: white;
+    transition: all 0.15s;
+  }
+  .btn:hover:not(:disabled) { background: var(--primary-dark); transform: translateY(-1px); }
+  .btn.secondary { background: #e5e7eb; color: var(--text); }
+  .btn.secondary:hover:not(:disabled) { background: #d1d5db; }
+  .speed-wrap { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-left: auto; }
+  .speed-wrap input { width: 80px; }
+
+  /* Main 2-column layout */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 16px;
+  }
+  @media (max-width: 760px) {
+    .main { grid-template-columns: 1fr; }
+  }
+
+  /* Loop diagram */
+  .loop-panel {
+    background: var(--card);
+    padding: 24px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  .loop-panel-title {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .loop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .step-box {
+    width: 200px;
+    padding: 16px 20px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    background: white;
+    text-align: center;
+    transition: all 0.4s ease;
+    position: relative;
+  }
+  .step-box.active {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.12), 0 8px 24px rgba(0,0,0,0.08);
+  }
+  .step-box .icon { font-size: 24px; margin-bottom: 4px; }
+  .step-box .name { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
+  .step-box .desc { font-size: 12px; color: var(--muted); }
+
+  .step-box.think.active { border-color: var(--think); }
+  .step-box.think.active .name { color: var(--think); }
+  .step-box.act.active { border-color: var(--act); }
+  .step-box.act.active .name { color: var(--act); }
+  .step-box.obs.active { border-color: var(--obs); }
+  .step-box.obs.active .name { color: var(--obs); }
+  .step-box.decide.active { border-color: var(--decide); }
+  .step-box.decide.active .name { color: var(--decide); }
+  .step-box.done.active { border-color: var(--done); background: #ecfdf5; }
+  .step-box.done.active .name { color: var(--done); }
+
+  .arrow {
+    height: 28px;
+    width: 2px;
+    background: var(--border);
+    position: relative;
+  }
+  .arrow.active { background: var(--primary); }
+  .arrow::after {
+    content: '▼';
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--border);
+    font-size: 10px;
+  }
+  .arrow.active::after { color: var(--primary); }
+
+  .loop-back {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: #fffbeb;
+    border: 1px dashed #fbbf24;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #92400e;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .loop-back.show { opacity: 1; }
+
+  /* Messages */
+  .msg-panel {
+    background: var(--card);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    min-height: 460px;
+  }
+  .msg-panel-title {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .msg-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 480px;
+  }
+  .msg {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    border-left: 3px solid transparent;
+  }
+  .msg.show { opacity: 1; transform: translateY(0); }
+  .msg .role {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    color: var(--muted);
+  }
+  .msg.user { background: #eff6ff; border-left-color: var(--primary); }
+  .msg.user .role { color: var(--primary); }
+  .msg.think { background: #fffbeb; border-left-color: var(--think); }
+  .msg.think .role { color: var(--think); }
+  .msg.act { background: #ecfdf5; border-left-color: var(--act); }
+  .msg.act .role { color: var(--act); }
+  .msg.act .body { font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 12px; }
+  .msg.obs { background: #f5f3ff; border-left-color: var(--obs); }
+  .msg.obs .role { color: var(--obs); }
+  .msg.obs .body { color: var(--muted); }
+  .msg.decide { background: #fdf2f8; border-left-color: var(--decide); }
+  .msg.decide .role { color: var(--decide); }
+  .msg.done { background: #ecfdf5; border-left-color: var(--done); }
+  .msg.done .role { color: var(--done); }
+  .msg.done .body { font-weight: 500; }
+
+  /* Footer takeaway */
+  .takeaway {
+    margin-top: 20px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .takeaway.show { opacity: 1; transform: translateY(0); }
+  .takeaway h3 { font-size: 16px; margin-bottom: 8px; }
+  .takeaway p { font-size: 14px; opacity: 0.95; }
+
+  .progress-track {
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--primary);
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+
+  /* Round counter */
+  .round-badge {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    padding: 4px 10px;
+    background: var(--code-bg);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>🔄 Agent 循环可视化</h1>
+    <p>看清楚 Agent 内部的「思考 → 行动 → 观察」是怎么转的</p>
+    <div class="nav">
+      ← <a href="./">查看复杂任务版（苏州旅游）</a>
+    </div>
+  </div>
+
+  <div class="controls">
+    <select id="taskSelect">
+      <option value="weather">📍 比天气：北京 vs 上海 哪个更冷</option>
+      <option value="math">🧮 算账：买这些东西总共多少钱</option>
+      <option value="search">🔍 查找：苹果创始人是谁，他多少岁创立的</option>
+      <option value="compare">⚖️ 对比：iPhone 和华为 Mate 哪个更便宜</option>
+    </select>
+    <button class="btn" id="playBtn">▶ 自动播放</button>
+    <button class="btn secondary" id="stepBtn">→ 单步</button>
+    <button class="btn secondary" id="resetBtn">↻ 重置</button>
+    <div class="speed-wrap">
+      <span>速度</span>
+      <input type="range" id="speed" min="0.5" max="3" step="0.5" value="1.5">
+      <span id="speedLabel">1.5x</span>
+    </div>
+  </div>
+
+  <div class="progress-track"><div class="progress-bar" id="progress"></div></div>
+
+  <div class="main">
+    <div class="loop-panel">
+      <div class="round-badge" id="roundBadge">Round 0</div>
+      <div class="loop-panel-title">Agent 内部循环</div>
+      <div class="loop">
+        <div class="step-box think" id="box-think">
+          <div class="icon">💭</div>
+          <div class="name">思考</div>
+          <div class="desc">LLM 决定下一步做什么</div>
+        </div>
+        <div class="arrow" id="arrow-1"></div>
+        <div class="step-box act" id="box-act">
+          <div class="icon">🔧</div>
+          <div class="name">行动</div>
+          <div class="desc">调用某个工具</div>
+        </div>
+        <div class="arrow" id="arrow-2"></div>
+        <div class="step-box obs" id="box-obs">
+          <div class="icon">📥</div>
+          <div class="name">观察</div>
+          <div class="desc">看工具返回什么</div>
+        </div>
+        <div class="arrow" id="arrow-3"></div>
+        <div class="step-box decide" id="box-decide">
+          <div class="icon">❓</div>
+          <div class="name">完成了吗</div>
+          <div class="desc">还要继续 / 可以结束</div>
+        </div>
+        <div class="loop-back" id="loopBack">↑ 还没完成 → 回到「思考」继续下一轮</div>
+      </div>
+    </div>
+
+    <div class="msg-panel">
+      <div class="msg-panel-title">📨 内部消息流</div>
+      <div class="msg-list" id="msgList"></div>
+    </div>
+  </div>
+
+  <div class="takeaway" id="takeaway">
+    <h3>💡 看清楚了吗？</h3>
+    <p>Agent 的核心 = 一个 <strong>无限循环</strong>：思考 → 行动 → 观察 → 判断完成。<br/>
+    每一轮都是 LLM 自己决定调什么工具，不是事先安排的。<br/>
+    <strong>所有复杂的 AI 产品（Claude Code、Cursor、Manus），本质都是这个 4 步循环外面包了无数层。</strong></p>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// 任务数据：4 个示例
+// ════════════════════════════════════════════════════════════════
+const TASKS = {
+  weather: {
+    user: '北京和上海哪个城市今天更冷？',
+    steps: [
+      { round: 1, stage: 'think',   text: '要比较温度，得先查北京' },
+      { round: 1, stage: 'act',     text: 'get_weather("北京")' },
+      { round: 1, stage: 'obs',     text: '北京 3°C，晴' },
+      { round: 1, stage: 'decide',  text: '只查了一个，还没法比，继续' },
+      { round: 2, stage: 'think',   text: '现在查上海' },
+      { round: 2, stage: 'act',     text: 'get_weather("上海")' },
+      { round: 2, stage: 'obs',     text: '上海 12°C，多云' },
+      { round: 2, stage: 'decide',  text: '数据齐了，可以回答' },
+      { round: 3, stage: 'done',    text: '北京更冷（3°C），比上海低 9°C' }
+    ]
+  },
+  math: {
+    user: '我买了 3 个 ¥15 的杯子和 2 本 ¥45 的书，一共多少钱？',
+    steps: [
+      { round: 1, stage: 'think',   text: '先算杯子的总价' },
+      { round: 1, stage: 'act',     text: 'calculator("3 * 15")' },
+      { round: 1, stage: 'obs',     text: '= 45' },
+      { round: 1, stage: 'decide',  text: '杯子算完了，再算书' },
+      { round: 2, stage: 'think',   text: '算书的总价' },
+      { round: 2, stage: 'act',     text: 'calculator("2 * 45")' },
+      { round: 2, stage: 'obs',     text: '= 90' },
+      { round: 2, stage: 'decide',  text: '加起来就行了' },
+      { round: 3, stage: 'think',   text: '把两个加起来' },
+      { round: 3, stage: 'act',     text: 'calculator("45 + 90")' },
+      { round: 3, stage: 'obs',     text: '= 135' },
+      { round: 3, stage: 'decide',  text: '搞定，可以回答' },
+      { round: 4, stage: 'done',    text: '总共 ¥135（杯子 45 + 书 90）' }
+    ]
+  },
+  search: {
+    user: '苹果公司的创始人是谁？他创立苹果时多少岁？',
+    steps: [
+      { round: 1, stage: 'think',   text: '先搜苹果创始人是谁' },
+      { round: 1, stage: 'act',     text: 'web_search("苹果公司 创始人")' },
+      { round: 1, stage: 'obs',     text: '史蒂夫·乔布斯, 1976 年创立' },
+      { round: 1, stage: 'decide',  text: '知道是乔布斯了，还要算他的年龄' },
+      { round: 2, stage: 'think',   text: '查乔布斯的生日' },
+      { round: 2, stage: 'act',     text: 'web_search("乔布斯 出生年份")' },
+      { round: 2, stage: 'obs',     text: '1955 年 2 月 24 日生' },
+      { round: 2, stage: 'decide',  text: '可以算年龄了' },
+      { round: 3, stage: 'think',   text: '1976 - 1955 = 21' },
+      { round: 3, stage: 'act',     text: 'calculator("1976 - 1955")' },
+      { round: 3, stage: 'obs',     text: '= 21' },
+      { round: 3, stage: 'decide',  text: '数据齐了' },
+      { round: 4, stage: 'done',    text: '苹果由史蒂夫·乔布斯创立，他创立时 21 岁（1976 年）' }
+    ]
+  },
+  compare: {
+    user: 'iPhone 15 和华为 Mate 60 哪个更便宜？',
+    steps: [
+      { round: 1, stage: 'think',   text: '同时查两款手机的价格（并行）' },
+      { round: 1, stage: 'act',     text: 'get_price("iPhone 15")  +  get_price("华为 Mate 60")' },
+      { round: 1, stage: 'obs',     text: 'iPhone 15: ¥5,999  /  Mate 60: ¥5,499' },
+      { round: 1, stage: 'decide',  text: '一轮就够了，直接给答案' },
+      { round: 2, stage: 'done',    text: '华为 Mate 60 更便宜 ¥500（5499 vs 5999）' }
+    ]
+  }
+};
+
+// ════════════════════════════════════════════════════════════════
+// 状态 + 渲染
+// ════════════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+const STAGES = ['think', 'act', 'obs', 'decide', 'done'];
+const STAGE_LABELS = { think: 'REASON 思考', act: 'ACT 行动', obs: 'OBSERVE 观察', decide: 'DECIDE 判断', done: 'DONE 完成', user: 'USER 提问' };
+
+let currentTask = 'weather';
+let queue = [];
+let position = 0;
+let playing = false;
+let lastRound = 0;
+
+const taskSelect = $('taskSelect');
+const playBtn = $('playBtn');
+const stepBtn = $('stepBtn');
+const resetBtn = $('resetBtn');
+const speed = $('speed');
+const speedLabel = $('speedLabel');
+const progress = $('progress');
+const roundBadge = $('roundBadge');
+const msgList = $('msgList');
+const loopBack = $('loopBack');
+const takeaway = $('takeaway');
+
+function getSpeed() { return parseFloat(speed.value); }
+function delay(ms) { return new Promise(r => setTimeout(r, ms / getSpeed())); }
+
+function clearLoopHighlight() {
+  ['think','act','obs','decide','done'].forEach(s => {
+    $(`box-${s}`).classList.remove('active');
+  });
+  ['arrow-1','arrow-2','arrow-3'].forEach(a => {
+    $(a).classList.remove('active');
+  });
+  loopBack.classList.remove('show');
+}
+
+function highlightStage(stage) {
+  clearLoopHighlight();
+  $(`box-${stage}`).classList.add('active');
+  // light up arrows leading TO this box
+  const arrowMap = { act: 'arrow-1', obs: 'arrow-2', decide: 'arrow-3' };
+  if (arrowMap[stage]) $(arrowMap[stage]).classList.add('active');
+}
+
+function reset() {
+  playing = false;
+  position = 0;
+  lastRound = 0;
+  playBtn.textContent = '▶ 自动播放';
+  msgList.innerHTML = '';
+  progress.style.width = '0%';
+  roundBadge.textContent = 'Round 0';
+  takeaway.classList.remove('show');
+  clearLoopHighlight();
+
+  // Build queue from current task
+  const task = TASKS[currentTask];
+  queue = [
+    { stage: 'user', text: task.user },
+    ...task.steps
+  ];
+
+  // Show user message immediately
+  addMsg('user', task.user);
+  position = 1;
+}
+
+function addMsg(stage, text, round) {
+  const div = document.createElement('div');
+  div.className = `msg ${stage}`;
+  const label = STAGE_LABELS[stage] + (round ? ` · R${round}` : '');
+  div.innerHTML = `
+    <div class="role">${label}</div>
+    <div class="body">${escapeHtml(text)}</div>
+  `;
+  msgList.appendChild(div);
+  requestAnimationFrame(() => div.classList.add('show'));
+  msgList.scrollTop = msgList.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function advance() {
+  if (position >= queue.length) {
+    playing = false;
+    playBtn.textContent = '✓ 完成';
+    takeaway.classList.add('show');
+    progress.style.width = '100%';
+    return;
+  }
+  const ev = queue[position++];
+
+  if (ev.round && ev.round !== lastRound) {
+    lastRound = ev.round;
+    roundBadge.textContent = `Round ${ev.round}`;
+  }
+
+  highlightStage(ev.stage);
+  addMsg(ev.stage, ev.text, ev.round);
+
+  // Show "loop back" hint when decide is "still going"
+  if (ev.stage === 'decide' && position < queue.length) {
+    setTimeout(() => loopBack.classList.add('show'), 400);
+  }
+
+  progress.style.width = `${(position / queue.length) * 100}%`;
+
+  if (playing) {
+    await delay(1200);
+    advance();
+  }
+}
+
+function play() {
+  if (position >= queue.length) reset();
+  playing = true;
+  playBtn.textContent = '⏸ 暂停';
+  advance();
+}
+function pause() {
+  playing = false;
+  playBtn.textContent = position >= queue.length ? '✓ 完成' : '▶ 继续';
+}
+
+playBtn.onclick = () => { playing ? pause() : play(); };
+stepBtn.onclick = () => { playing = false; playBtn.textContent = '▶ 继续'; advance(); };
+resetBtn.onclick = () => reset();
+speed.oninput = () => { speedLabel.textContent = getSpeed() + 'x'; };
+taskSelect.onchange = () => {
+  currentTask = taskSelect.value;
+  reset();
+};
+
+// Init
+reset();
+</script>
+</body>
+</html>
