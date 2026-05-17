@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 实战回放 · 苏州两日游</title>
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --primary: #3b82f6;
+    --primary-dark: #2563eb;
+    --think: #f59e0b;
+    --act: #10b981;
+    --obs: #8b5cf6;
+    --success: #059669;
+    --code-bg: #f3f4f6;
+    --shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 24px 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 880px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 32px 28px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+  }
+  .header h1 { font-size: 26px; font-weight: 600; margin-bottom: 8px; }
+  .header p { opacity: 0.92; font-size: 15px; }
+  .header .badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 6px;
+    font-size: 12px;
+    margin-top: 12px;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    padding: 14px 18px;
+    background: var(--card);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+  .btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    background: var(--primary);
+    color: white;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .btn:hover:not(:disabled) { background: var(--primary-dark); transform: translateY(-1px); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn.secondary { background: #e5e7eb; color: var(--text); }
+  .btn.secondary:hover:not(:disabled) { background: #d1d5db; }
+  .speed-wrap { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .speed-wrap input { width: 100px; }
+
+  /* Progress */
+  .progress-track {
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--primary);
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+
+  /* User message */
+  .user-msg {
+    background: var(--card);
+    padding: 16px 20px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    box-shadow: var(--shadow);
+  }
+  .user-msg .avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .user-msg .text { font-size: 15px; }
+  .user-msg .role { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.5px; margin-bottom: 2px; }
+
+  /* Round card */
+  .round {
+    background: var(--card);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    box-shadow: var(--shadow);
+  }
+  .round.show { opacity: 1; transform: translateY(0); }
+  .round-head {
+    padding: 12px 20px;
+    background: #fafbfc;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .round-head .num {
+    font-weight: 600; font-size: 13px;
+    color: var(--text);
+  }
+  .round-head .note {
+    font-size: 11px;
+    color: var(--muted);
+    padding: 2px 8px;
+    background: var(--code-bg);
+    border-radius: 4px;
+  }
+
+  /* Steps */
+  .steps { padding: 4px 0; }
+  .step {
+    padding: 12px 20px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    border-left: 3px solid transparent;
+  }
+  .step.show { opacity: 1; transform: translateX(0); }
+  .step + .step { border-top: 1px dashed #f0f0f0; }
+  .step .tag {
+    flex-shrink: 0;
+    width: 80px;
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding-top: 2px;
+  }
+  .step .body { flex: 1; font-size: 14px; min-width: 0; }
+  .step.think { border-left-color: var(--think); }
+  .step.think .tag { color: var(--think); }
+  .step.act { border-left-color: var(--act); }
+  .step.act .tag { color: var(--act); }
+  .step.act .body {
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+    background: var(--code-bg);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    overflow-x: auto;
+  }
+  .step.obs { border-left-color: var(--obs); }
+  .step.obs .tag { color: var(--obs); }
+  .step.obs .body { color: var(--muted); font-size: 13px; }
+
+  .cursor {
+    display: inline-block;
+    width: 2px; height: 14px;
+    background: var(--primary);
+    margin-left: 2px;
+    vertical-align: middle;
+    animation: blink 0.9s infinite;
+  }
+  @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+  /* Final result */
+  .result {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    padding: 24px 28px;
+    border-radius: 12px;
+    margin-top: 8px;
+    opacity: 0;
+    transform: scale(0.97);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    box-shadow: var(--shadow);
+  }
+  .result.show { opacity: 1; transform: scale(1); }
+  .result h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .result-day {
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+  }
+  .result-day:last-child { border-bottom: none; }
+  .result-day .day-title { font-weight: 600; margin-bottom: 6px; font-size: 14px; }
+  .result-day .day-items { font-size: 13px; opacity: 0.95; }
+  .result-day .day-items div { padding: 2px 0; }
+  .result-meta {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.2);
+    display: flex;
+    gap: 24px;
+    font-size: 13px;
+  }
+  .result-meta strong { font-weight: 600; }
+
+  /* Stats */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 20px;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+  .stats.show { opacity: 1; }
+  .stat {
+    background: var(--card);
+    padding: 16px;
+    border-radius: 10px;
+    text-align: center;
+    border: 1px solid var(--border);
+  }
+  .stat .num { font-size: 24px; font-weight: 700; color: var(--primary); }
+  .stat .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* Footer hint */
+  .hint {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 24px;
+    padding: 12px;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 8px;
+  }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-think { background: var(--think); }
+  .dot-act { background: var(--act); }
+  .dot-obs { background: var(--obs); }
+
+  @media (max-width: 640px) {
+    .header { padding: 24px 20px; }
+    .header h1 { font-size: 22px; }
+    .step { flex-direction: column; gap: 4px; }
+    .step .tag { width: auto; }
+    .stats { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>🤖 Agent 实战回放</h1>
+    <p>看一个 Agent 如何用 5 轮思考完成「规划苏州两日游」</p>
+    <span class="badge">基于 ReAct 循环 · 18 次工具调用 · 模拟数据</span>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="playBtn">▶ 自动播放</button>
+    <button class="btn secondary" id="stepBtn">→ 下一步</button>
+    <button class="btn secondary" id="resetBtn">↻ 重置</button>
+    <div class="speed-wrap">
+      <span>速度</span>
+      <input type="range" id="speed" min="0.5" max="3" step="0.5" value="1.5">
+      <span id="speedLabel">1.5x</span>
+    </div>
+  </div>
+
+  <div class="progress-track"><div class="progress-bar" id="progress"></div></div>
+
+  <div id="content"></div>
+
+  <div class="stats" id="stats">
+    <div class="stat"><div class="num" id="statRounds">5</div><div class="label">思考轮次</div></div>
+    <div class="stat"><div class="num" id="statTools">7</div><div class="label">工具调用</div></div>
+    <div class="stat"><div class="num" id="statTime">12s</div><div class="label">模拟耗时</div></div>
+  </div>
+
+  <div class="hint">
+    <div class="legend">
+      <span class="legend-item"><span class="legend-dot dot-think"></span>Reason 思考</span>
+      <span class="legend-item"><span class="legend-dot dot-act"></span>Act 行动</span>
+      <span class="legend-item"><span class="legend-dot dot-obs"></span>Observe 观察</span>
+    </div>
+    <p style="margin-top:8px">提示：每一步都是 Agent 自己决定的，没有人在背后告诉它"先查天气再查酒店"</p>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// 数据：Agent 的执行轨迹（trace）
+// ════════════════════════════════════════════════════════════════
+const TRACE = [
+  {
+    type: 'user',
+    text: '帮我规划这周末和家人去苏州的两日游'
+  },
+  {
+    type: 'round', n: 1,
+    steps: [
+      { k: 'think', t: '我需要先知道这周末是哪两天，再查天气' },
+      { k: 'act',   t: 'get_date_range("this weekend")' },
+      { k: 'obs',   t: '2026-05-23 (周六) ~ 2026-05-24 (周日)' }
+    ]
+  },
+  {
+    type: 'round', n: 2, note: '并行调用两个工具',
+    steps: [
+      { k: 'think', t: '同时查两天的天气（并行加速）' },
+      { k: 'act',   t: 'get_weather("苏州", "2026-05-23")' },
+      { k: 'act',   t: 'get_weather("苏州", "2026-05-24")' },
+      { k: 'obs',   t: '周六：晴 24°C   |   周日：小雨 22°C' }
+    ]
+  },
+  {
+    type: 'round', n: 3,
+    steps: [
+      { k: 'think', t: '周日有雨 → 安排室内景点；周六晴 → 户外景点' },
+      { k: 'act',   t: 'search_attractions("苏州", "亲子友好")' },
+      { k: 'obs',   t: '[拙政园, 苏州博物馆, 平江路, 留园, 网师园, …]' }
+    ]
+  },
+  {
+    type: 'round', n: 4, note: '并行调用两个工具',
+    steps: [
+      { k: 'think', t: '景点定了，开始查交通和住宿' },
+      { k: 'act',   t: 'search_train("上海", "苏州", "2026-05-23 早")' },
+      { k: 'act',   t: 'search_hotel("苏州", "平江路附近", "家庭房")' },
+      { k: 'obs',   t: '高铁 G7335 8:00 ¥39.5  |  酒店「平江府」¥680/晚' }
+    ]
+  },
+  {
+    type: 'round', n: 5,
+    steps: [
+      { k: 'think', t: '所有数据齐了，综合输出完整行程' }
+    ]
+  },
+  {
+    type: 'result',
+    days: [
+      {
+        title: '📅 周六 5/23（晴 24°C）',
+        items: [
+          '08:00  G7335 上海虹桥 → 苏州',
+          '09:30  抵达酒店「平江府」放行李',
+          '10:30  拙政园（户外，2 小时）',
+          '12:30  平江路 · 苏式午餐',
+          '14:00  平江路漫步 · 苏绣 · 评弹',
+          '18:00  酒店附近晚餐'
+        ]
+      },
+      {
+        title: '📅 周日 5/24（小雨 22°C）',
+        items: [
+          '09:00  苏州博物馆（室内，免费需预约）',
+          '12:00  退房，金鸡湖商圈午餐',
+          '14:00  G7340 苏州 → 上海虹桥'
+        ]
+      }
+    ],
+    meta: { trains: '¥79', hotel: '¥680', tickets: '¥260', meals: '¥480', total: '约 ¥1500' }
+  }
+];
+
+// ════════════════════════════════════════════════════════════════
+// 渲染 + 播放控制
+// ════════════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+const content = $('content');
+const playBtn = $('playBtn');
+const stepBtn = $('stepBtn');
+const resetBtn = $('resetBtn');
+const speed = $('speed');
+const speedLabel = $('speedLabel');
+const progress = $('progress');
+const stats = $('stats');
+
+// flatten trace into a queue of reveals
+function flatten() {
+  const q = [];
+  TRACE.forEach((item, idx) => {
+    if (item.type === 'user') {
+      q.push({ kind: 'user', item, idx });
+    } else if (item.type === 'round') {
+      q.push({ kind: 'round-frame', item, idx });
+      item.steps.forEach((s, sIdx) => {
+        q.push({ kind: 'step', step: s, roundIdx: idx, stepIdx: sIdx });
+      });
+    } else if (item.type === 'result') {
+      q.push({ kind: 'result', item, idx });
+    }
+  });
+  return q;
+}
+let queue = flatten();
+let position = 0;
+let playing = false;
+let timer = null;
+
+function renderInitial() {
+  content.innerHTML = '';
+  stats.classList.remove('show');
+  progress.style.width = '0%';
+}
+
+function getSpeed() { return parseFloat(speed.value); }
+function delay(ms) { return new Promise(r => setTimeout(r, ms / getSpeed())); }
+
+async function revealNext() {
+  if (position >= queue.length) {
+    stop();
+    stats.classList.add('show');
+    return;
+  }
+  const ev = queue[position++];
+
+  if (ev.kind === 'user') {
+    const div = document.createElement('div');
+    div.className = 'user-msg';
+    div.innerHTML = `
+      <div class="avatar">U</div>
+      <div>
+        <div class="role">USER</div>
+        <div class="text">${ev.item.text}</div>
+      </div>`;
+    content.appendChild(div);
+  }
+
+  if (ev.kind === 'round-frame') {
+    const div = document.createElement('div');
+    div.className = 'round';
+    div.id = `round-${ev.idx}`;
+    div.innerHTML = `
+      <div class="round-head">
+        <span class="num">Round ${ev.item.n}</span>
+        ${ev.item.note ? `<span class="note">${ev.item.note}</span>` : ''}
+      </div>
+      <div class="steps" id="steps-${ev.idx}"></div>`;
+    content.appendChild(div);
+    requestAnimationFrame(() => div.classList.add('show'));
+  }
+
+  if (ev.kind === 'step') {
+    const stepsBox = document.getElementById(`steps-${ev.roundIdx}`);
+    const s = ev.step;
+    const div = document.createElement('div');
+    div.className = `step ${s.k}`;
+    const labelMap = { think: 'REASON', act: 'ACT', obs: 'OBSERVE' };
+    div.innerHTML = `
+      <div class="tag">${labelMap[s.k]}</div>
+      <div class="body" data-target="${escapeHtml(s.t)}"></div>`;
+    stepsBox.appendChild(div);
+    requestAnimationFrame(() => div.classList.add('show'));
+    await typewriter(div.querySelector('.body'), s.t);
+  }
+
+  if (ev.kind === 'result') {
+    const div = document.createElement('div');
+    div.className = 'result';
+    const daysHtml = ev.item.days.map(d => `
+      <div class="result-day">
+        <div class="day-title">${d.title}</div>
+        <div class="day-items">${d.items.map(i => `<div>${i}</div>`).join('')}</div>
+      </div>`).join('');
+    const m = ev.item.meta;
+    div.innerHTML = `
+      <h2>✅ 完整行程方案</h2>
+      ${daysHtml}
+      <div class="result-meta">
+        <div><strong>高铁</strong> ${m.trains}</div>
+        <div><strong>酒店</strong> ${m.hotel}</div>
+        <div><strong>景点</strong> ${m.tickets}</div>
+        <div><strong>餐饮</strong> ${m.meals}</div>
+        <div style="margin-left:auto"><strong>合计</strong> ${m.total}</div>
+      </div>`;
+    content.appendChild(div);
+    requestAnimationFrame(() => div.classList.add('show'));
+  }
+
+  progress.style.width = `${(position / queue.length) * 100}%`;
+
+  // auto-scroll
+  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+
+  if (playing) {
+    const baseDelay = ev.kind === 'step' ? 600 : 400;
+    await delay(baseDelay);
+    revealNext();
+  }
+}
+
+function typewriter(el, text) {
+  return new Promise(resolve => {
+    el.innerHTML = '<span class="cursor"></span>';
+    let i = 0;
+    const cursor = el.querySelector('.cursor');
+    const speedFactor = getSpeed();
+    const interval = Math.max(8, 30 / speedFactor);
+    const tick = setInterval(() => {
+      i++;
+      el.innerHTML = escapeHtml(text.slice(0, i)) + '<span class="cursor"></span>';
+      if (i >= text.length) {
+        clearInterval(tick);
+        el.innerHTML = escapeHtml(text);
+        resolve();
+      }
+    }, interval);
+  });
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function play() {
+  if (position >= queue.length) reset();
+  playing = true;
+  playBtn.textContent = '⏸ 暂停';
+  revealNext();
+}
+function stop() {
+  playing = false;
+  playBtn.textContent = position >= queue.length ? '✓ 完成' : '▶ 继续';
+}
+function reset() {
+  playing = false;
+  position = 0;
+  renderInitial();
+  playBtn.textContent = '▶ 自动播放';
+}
+
+playBtn.onclick = () => { playing ? stop() : play(); };
+stepBtn.onclick = () => { playing = false; playBtn.textContent = '▶ 继续'; revealNext(); };
+resetBtn.onclick = () => reset();
+speed.oninput = () => { speedLabel.textContent = getSpeed() + 'x'; };
+
+renderInitial();
+</script>
+</body>
+</html>
